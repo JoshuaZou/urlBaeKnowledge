@@ -1,0 +1,55 @@
+    最近在换工作爬虫方向的，之前在做相对url拼接成绝对可用url都是自己用字符串format的。虽然这也是一种方法，但是明显不是面试官想要的答案。
+所以私下里进行相关总结。
+
+    首先说下什么叫URL拼接，我们有这么一个HTML片段：
+        <a href="../../a.html">click me</a>
+做为一只辛苦的爬虫，我们要跟踪到这个click me指向的页面，假设这个片段来自：http://www.xxxdu.com，那么目标页面是什么呢？
+显然不是
+    http://www.xxxdu.com/../../a.html
+而是
+    http://www.xxxdu.com/a.html
+
+第一个结果看着很脑残，但是这就是Python的urljoin给出的结果,按理说urljoin应该解决这个“路径非正规化”(Normalize path )的问题，但是它没有：
+    from urlparse import urljoin
+    print urljoin("http://www.xxx.com", "../../a.html")
+   结果如下： 
+   'http://www.xxx.com/../../a.html'
+   
+OK，其实这个问题的解决根本不再URL上，因为URL已经拼接了，更准确的描述这个问题应该是路径的正规化，
+即xxx.com后面的这部分路径，如果我们把它想象成Unix路径，不就是求相对论路径”/../../a.html”的绝对路径么？
+
+我们可以用查找、正则表达式把后面这部分分离出来，更省事的方法是"urlparse"： 
+  >>> from urlparse import urlparse 
+  >>> urlparse("http://www.xxx.com/../../a.html")
+  ParseResult(scheme='http', netloc='www.xxx.com', path='/../../a.html', params='', query='', fragment='')
+
+上述结果的第2部分, arr[2]就是我们要的path啦。
+然后Python提供了Unix路径的正规化函数"posixpath.normpath"
+最后我们把正规化好的path重新组装成url，于是整个函数出炉：
+
+'''
+from urlparse import urljoin
+from urlparse import urlparse
+from urlparse import urlunparse
+from posixpath import normpath
+ 
+def myjoin(base, url):
+    url1 = urljoin(base, url)
+    arr = urlparse(url1)
+    path = normpath(arr[2])
+    return urlunparse((arr.scheme, arr.netloc, path, arr.params, arr.query, arr.fragment))
+ 
+if __name__ == "__main__":
+    print myjoin("http://www.baidu.com", "abc.html")
+    print myjoin("http://www.baidu.com", "/../../abc.html")
+    print myjoin("http://www.baidu.com/xxx", "./../../abc.html")
+    print myjoin("http://www.baidu.com", "abc.html?key=value&m=x")
+''' 
+
+输出结果： 
+http://www.baidu.com/abc.html
+http://www.baidu.com/abc.html
+http://www.baidu.com/abc.html
+http://www.baidu.com/abc.html?key=value&m=x
+ 
+
